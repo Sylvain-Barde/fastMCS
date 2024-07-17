@@ -37,7 +37,7 @@ def blockBootstrap(rng,obs,B,b):
     Parameters
     ----------
     rng : Instance of "numpy.random.default_rng"
-        Random number generator for the .
+        Random number generator for the bootstrap
     obs : int
         Number of observations to be resampled
     B : int
@@ -76,7 +76,7 @@ def stationaryBootstrap(rng, obs,B,b):
     Parameters
     ----------
     rng : Instance of "numpy.random.default_rng"
-        Random number generator for the .
+        Random number generator for the bootstrap
     obs : int
         Number of observations to be resampled
     B : int
@@ -201,6 +201,10 @@ class mcs:
             self.seed = time.time()     # set time as seed source
         else:
             self.seed = seed            # set provided seed
+            
+        if self.verbose:
+            print(u'\u2500' * 75)
+            print(' Creating new MCS object',flush=True)
 
     def save(self, path, filename):
         """
@@ -331,6 +335,9 @@ class mcs:
             print(' - additional: {.d}'.format(losses.shape[0]))
         else:
             self.Losses = np.concatenate((self.Losses,losses),axis = 1)
+            if self.verbose:
+                print(' Added losses: {:d} obs x {:d} models'.format(
+                    losses.shape[0], losses.shape[1]))
 
     def run(self, B=1000, b=10, bootstrap='stationary', algorithm='2-pass'):
         """
@@ -420,7 +427,7 @@ class mcs:
             nNew = n-n0                      # Number of additional models
 
             if self.verbose:
-                print(' Updating MCS')
+                print(' Updating existing MCS analysis')
                 print('  No of existing models:   {:d}'.format(n0))
                 print('  No of additional models: {:d}'.format(nNew))
 
@@ -428,7 +435,7 @@ class mcs:
             self.tScore = np.concatenate(       # t-statistic vector
                                 (self.tScore,
                                  np.zeros(nNew)),
-                                        axis = 1)
+                                        axis = 0)
             self.bootMean = np.concatenate(	    # Mean t-statistic vector
                                  (self.bootMean,
                                   np.zeros([B,nNew])),
@@ -561,6 +568,8 @@ class mcs:
         elif algorithm == 'elimination':
             # Original elimination implementation, provided for performance
             # comparison. Not meant for large-scale application
+            if self.verbose:
+                print(' Running elimination MCS analysis')
 
             # Preprocess main and bootstrapped t-statistics
             dL = np.mean(
