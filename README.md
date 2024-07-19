@@ -1,10 +1,10 @@
 # fastMCS
 
-This toolbox implements the fast updating implementation of the Model Confidence Set (MCS) presented in "A fast algorithm for finding the confidence set of large model collections". This improves on the original elimination implementation of Hansen *et. al.* (2011).
+This toolbox implements the fast updating implementation of the Model Confidence Set (MCS) presented in "A fast algorithm for finding the confidence set of large model collections", which improves on the original elimination implementation of Hansen *et. al.* (2011).
 
 ## Requirements and Installation
 
-The toolbox is implemented entirely using `numpy 1.23.5`, which is the only external dependency. The requirements file specifies allow any compatible version to be used. The toolbox has **not** been tested with `numpy 2.0`, which may not be compatible. Additional (standard) packages required are: `os, sys, time, pickle, zlib`.
+The toolbox is implemented entirely using `numpy 1.23.5`, which is the only external dependency. The requirements file allows any compatible version to be used. The toolbox has **not** been tested with `numpy 2.0`, which may not be compatible. Additional (standard) packages required are: `os, sys, time, pickle, zlib`.
 
 At the moment the `fastMCS` toolbox is still in development, and does not yet have a distributable package (this is on the to-do list!). The functionality is all contained in the `fastMCS.py` module, and can be obtained simply by installing `numpy` and placing a copy of the file in the relevant directory.
 
@@ -21,11 +21,11 @@ from fastMCS import mcs
 An empty MCS analysis task is initialised as follows:
 
 ```python
-initSeed = 10
+initSeed = 10   # pick any value you want!
 mcsEst = mcs(seed = initSeed, verbose = False)
 ```
 
-The two options that can be picked at initialisation are
+The two options that can be picked at initialisation are:
  - The seed used by the random number generator, which controls the bootstrap replications used in the analysis. This can be provided manually to ensure replicability of results. If the seed is not provided, the class uses the current time (provided by `time.time()`) as the default.
  - The verbosity of the output. By default, this is set to `True` and the toolbox provides talkbacks for the outcome of each command. This can be manually turned off by setting the option to `False` (as is the case in the example here), to avoid producing console outputs. This can be useful if a large number of MCS analyses need to be run as part of a wider automated process, and one wishes to avoid crowding out the console.
 
@@ -37,6 +37,7 @@ To run an MCS analysis on an $N \times M$ loss matrix $L$, where $N$ is the numb
 # Adding a loss matrix 'losses'
 mcsEst.addLosses(losses)
 
+# Setting the bootstrap options and running the MS analysis
 B = 2000    # set number of bootstrap replications
 b = 5       # set block size
 mcsEst.run(B, b, bootstrap = 'stationary', algorithm = '2-pass')
@@ -83,7 +84,7 @@ mcsEstRecovered = mcs()
 mcsEstRecovered.load(savePath, filename)
 ```
 
-### Performance statistics
+### Accessing performance statistics
 
 The `mcsEst` object records the performance of each analysis in its  `mcsEst.stats` attribute. Because a given object can be updated with new losses an indefinite amount of times, this attribute consists of a list of python `dicts`, each one corresponding to a run. For instance `mcsEst.stats[0]` will contain the statistic for the initial run, `mcsEst.stats[1]` those of the first update, `mcsEst.stats[2]` those of the second update, etc.
 
@@ -95,7 +96,7 @@ Each run `dict` contains the following fields:
 - `'memory use'`: total memory used in bytes
 - `'memory alloc'`: detailed allocation of memory over variables
 
-## Reference:
+## References:
 
 - Hansen, P.R., Lunde, A. and Nason, J.M., 2011. The model confidence set. *Econometrica*, 79(2), pp.453-497.
-- Politis, D.N. and Romano, J.P., 1994. The stationary bootstrap. *Journal of the American Statistical association*, 89(428), pp.1303-1313.
+- Politis, D.N. and Romano, J.P., 1994. The stationary bootstrap. *Journal of the American Statistical Association*, 89(428), pp.1303-1313.
