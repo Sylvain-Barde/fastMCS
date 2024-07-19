@@ -2,7 +2,7 @@
 """
 Created on Thu Jan 26 11:19:07 2023
 
-@author: Sylvain Barde
+@author: Sylvain Barde, University of Kent
 
 Implements the fast model confidence set algorithm
 
@@ -201,7 +201,7 @@ class mcs:
             self.seed = time.time()     # set time as seed source
         else:
             self.seed = seed            # set provided seed
-            
+
         if self.verbose:
             print(u'\u2500' * 75)
             print(' Creating new MCS object',flush=True)
