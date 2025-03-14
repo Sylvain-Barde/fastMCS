@@ -131,7 +131,7 @@ class mcs:
         tScore (ndarray):
             Vector of model eliminations t-statistics
         tBootDist (ndarray):
-            Matrix of model Bootstrappedelimination t-statistics
+            Matrix of model Bootstrapped elimination t-statistics
         pVals (ndarray):
             Bootstrapped
         exclMods (ndarray):
@@ -148,7 +148,11 @@ class mcs:
 
     Methods:
         __init__ :
-            Initialises an empty instance of the MCS class
+            Initialise an empty instance of the MCS class
+        __tBootCalc__:
+            Calculate vectors of elimination/botstrapped test statistics
+        __maxBootDist__:
+            Find the maximum of the bootstrapped test statistics
         save:
             Saves the current state of the MCS analysis to a pickle format
         load:
@@ -164,8 +168,8 @@ class mcs:
 
     def __init__(self, seed = None, verbose = True):
         """
-            Initialises an empty instance of the MCS class, with an optional
-            seed passed for the bootstrap algorithm
+        Initialises an empty instance of the MCS class, with an optional seed 
+        passed for the bootstrap algorithm
 
         Parameters
         ----------
@@ -205,6 +209,67 @@ class mcs:
         if self.verbose:
             print(u'\u2500' * 75)
             print(' Creating new MCS object',flush=True)
+
+    def __tBootCalc__(self, modRange, mod ):
+        """
+        Calculates the elimination test statistics and bootstrapped elimination
+        test statistics for a range of models relative to a fixed model.
+
+        Parameters
+        ----------
+        modRange : ndarray
+            indices of models for which to calculate the bootstrapped test 
+            statistics.
+        mod : int
+            index of the model with respect to which the test statsistics are 
+            calculated
+
+
+        Returns
+        -------
+        A tuple containing:
+        - tVec : ndarray
+            1D ndarray of elimination test statistics
+        - tBoot : ndarray
+            2D ndarray boostrapped elimination test statistics
+        
+        """
+        dLvec = np.mean(self.Losses[:,modRange] -
+                        self.Losses[:,mod][:,None],
+                        axis = 0)
+        Lboot = (self.bootMean[:,modRange] - 
+                  self.bootMean[:,mod][:,None])
+        dLboot = Lboot - dLvec[None,:]
+        varLvec = np.mean(dLboot**2,axis = 0)
+        tVec = dLvec / (varLvec**0.5)
+        tBoot = dLboot / (varLvec**0.5)  
+                         
+        return (tVec, tBoot)
+
+    def __maxBootDist__(self, modRange, mod ):
+        """
+        Returns the largest bootstrapped elimination test statistics for a 
+        range of models relative to a fixed model.
+
+        Parameters
+        ----------
+        modRange : ndarray
+            indices of models for which to calculate the bootstrapped test 
+            statistics.
+        mod : int
+            index of the model with respect to which the test statsistics are 
+            calculated
+
+        Returns
+        -------
+        float
+            largest absolute value in the bootstrapped vectors of elimination
+            test statistics.
+
+        """
+        
+        tBoot = self.__tBootCalc__(modRange, mod)[1]
+        return np.max(np.abs(tBoot), axis = 1)
 
     def save(self, path, filename):
         """
@@ -304,18 +369,18 @@ class mcs:
               models). This requires the number of observations to be the same
               in 'mcs.losses' and 'losses', the method fails if this is not
               the case.
-
+              
         Parameters
         ----------
         losses : ndarray
             2D ndarray containing model losses. Structure is:
-
+                
                 num obs x num models
-
+                
         Returns
         -------
         None.
-
+        
         """
 
         if self.verbose:
@@ -471,53 +536,62 @@ class mcs:
         if algorithm == '1-pass' or algorithm == '2-pass':
             if self.verbose:
                 print(' Running {:s} MCS analysis'.format(algorithm))
+                
+            # Pre-process models if using 1-pass to reduce risk of late swaps
+            modsProcessed = np.arange(0,n0)
+            if algorithm == '1-pass':
+                modsToProcess = n0 + np.argsort(np.mean(self.Losses[:,n0:n],
+                                                   axis = 0))
+            else:
+                modsToProcess = list(range(n0,n))
+
 
             # Pass 1: Sequential updating of model rankings
-            for i in range(n0,n):
+            for i in modsToProcess:
 
                 # -- Calculate current (i^th) row of the t-statistic table
-                dLvec = np.mean(self.Losses[:,0:i] -
-                                self.Losses[:,i][:,None],
-                                axis = 0)
-
                 self.bootMean[:,i] = np.mean(self.Losses[:,i][self.bootInds],
                                              axis=0).transpose()
-                Lboot = self.bootMean[:,0:i] - self.bootMean[:,i][:,None]
-
-                dLboot = Lboot - dLvec[None,:]
-                varLvec = np.mean(dLboot**2,axis = 0)
-                tVec = np.append(dLvec / (varLvec**0.5), 0)
+                tVec, tBoot = self.__tBootCalc__(modsProcessed, i)
+                tVec = np.append(tVec, 0)
 
                 # Find score of current model with respect to past models
                 tCurr = max(-tVec)
                 self.tScore[i] = tCurr
 
                 # Update past models on the basis of score against new model
-                # Ensures only worse models are updated
-                update = np.where((tVec > self.tScore[0:i+1]) &
-                                  (tVec >= tCurr))
-                self.tScore[update] = tVec[update]
-                modRank = np.argsort(self.tScore[0:i+1]).astype(int)
-
-                # Update bootstrapped distribution in same pass
-                if algorithm == '1-pass' and i > 0 :
+                modsProcessed = np.append(modsProcessed,i)
+                update = np.where((tVec > self.tScore[modsProcessed]) &
+                                   (tVec >= tCurr))
+                                                  
+                self.tScore[modsProcessed[update]] = tVec[update]
+                modRank = modsProcessed[
+                            np.argsort(self.tScore[modsProcessed]).astype(int)
+                            ]
+                
+                # Update bootstrapped distribution in same pass, once you have
+                # 2 models in collection
+                if algorithm == '1-pass' and len(modsProcessed) > 1:
 
                     # Find where current model enters the existing rankings
                     loc = np.where(modRank == i)[0][0]
                     modRankOldUpdated = np.insert(modRankOld,loc,i)
 
+                    modsBetter = np.where((self.tScore[modsProcessed] < tCurr))
+                    modsWorse = np.where((self.tScore[modsProcessed] > tCurr))
+
                     # Find range of any ranking swaps (will be in worse models)
                     swaps = modRankOldUpdated !=  modRank
                     swapsRange = np.where(swaps == True)[0]
                     if swapsRange.size > 0:
+ 
                         swaps[swapsRange[0]:swapsRange[-1]] = True
 
                     # Get bootstrapped distribution for current model
-                    tBoot = dLboot / (varLvec**0.5)
                     if loc == 0:    # Current model is the best
                         tMax = np.zeros(B)
                     else:
-                        tMax = np.max(np.abs(tBoot[:,modRank[0:loc]]),
+                        tMax = np.max(np.abs(tBoot[:,modsBetter[0]]),
                                       axis = 1)
                         self.tBootDist[:,i] = np.maximum(
                                             tMax,
@@ -526,8 +600,12 @@ class mcs:
 
                     # Update bootstrapped distr. for models worse than current
                     # - swaps are dealt with via the midpoint of bounds
-                    for j in range(loc+1,i+1):
-                        tMax = np.maximum(tMax, np.abs(tBoot[:,modRank[j]]))
+                    for j, mod in enumerate(modsWorse[0]):
+                        
+                        j += loc + 1 # Ajust index for current model location
+                        
+                        tMax = np.maximum(tMax, np.abs(tBoot[:,mod]))
+                        
                         if swaps[j]:
                             lBound = np.maximum(tMax,
                                             self.tBootDist[:,modRank[j-1]])
@@ -537,6 +615,7 @@ class mcs:
                         else:
                             self.tBootDist[:,modRank[j]] = np.maximum(tMax,
                                               self.tBootDist[:,modRank[j]])
+                            
                     # Memorise current ranking for next iteration
                     modRankOld = modRank
 
@@ -544,23 +623,14 @@ class mcs:
             self.exclMods = np.flip(modRank)
 
             # Pass 2: Sequential calculation of the bootstrapped distribution
-            # This is error-free, at the cost of not being updateable
+            # This is error-free, at the cost of not being updateable without 
+            # re-running analysis
             if algorithm == '2-pass':
                 for i in range(1,n):
                     modRange = modRank[0:i]
                     k = modRank[i]
 
-                    dLvec = np.mean(self.Losses[:,modRange] -
-                                    self.Losses[:,k][:,None],
-                                  axis = 0)
-                    Lboot = (self.bootMean[:,modRange] -
-                             self.bootMean[:,k][:,None])
-                    dLboot = Lboot - dLvec[None,:]
-
-                    varLvec = np.mean(dLboot**2,axis = 0)
-                    tBoot = dLboot / (varLvec**0.5)
-
-                    tMax = np.max(np.abs(tBoot), axis = 1)
+                    tMax = self.__maxBootDist__(modRange, k)
                     self.tBootDist[:,k] = np.maximum(
                                             tMax,
                                             self.tBootDist[:,modRank[i-1]])
